@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EchoRift Play Now (3D)</title>
+  <title>EchoRift Play Now (3D Enhanced)</title>
   <style>
-    html, body { margin:0; height:100%; overflow:hidden; background:#090f1f; color:#eaf0ff; font-family:system-ui,sans-serif; }
-    #wrap { display:grid; grid-template-columns:320px 1fr; height:100%; }
-    #hud { background:#101a36; border-right:1px solid #2b3a63; padding:14px; }
-    #hud h1 { margin:0 0 8px; font-size:18px; }
+    html, body { margin:0; height:100%; overflow:hidden; background:#080d1a; color:#eaf0ff; font-family:Inter,system-ui,sans-serif; }
+    #wrap { display:grid; grid-template-columns:330px 1fr; height:100%; }
+    #hud { background:linear-gradient(180deg,#121f3f,#0f1934); border-right:1px solid #2e3f6a; padding:14px; }
+    #hud h1 { margin:0 0 8px; font-size:18px; letter-spacing:.2px; }
     #hud p, #hud li { font-size:13px; line-height:1.35; }
-    .card { background:#18264d; border-radius:10px; padding:8px; margin:8px 0; }
+    .card { background:#1a2b55; border:1px solid #2f4a86; border-radius:10px; padding:8px; margin:8px 0; box-shadow: inset 0 0 0 1px #1f3568; }
     #game { width:100%; height:100%; display:block; }
     .ok { color:#89f7ad; }
   </style>
@@ -18,8 +18,8 @@
 <body>
 <div id="wrap">
   <aside id="hud">
-    <h1>EchoRift — 3D Play Now</h1>
-    <p class="ok">3D arena demo: Rift Skirmish loop in browser.</p>
+    <h1>EchoRift — 3D Play Now+</h1>
+    <p class="ok">Enhanced environment: mountains, grass detail, and detailed weapon view.</p>
     <div id="status" class="card"></div>
     <div id="rift" class="card"></div>
     <div id="score" class="card"></div>
@@ -28,7 +28,7 @@
       <li>Move: WASD</li>
       <li>Look: ← / →</li>
       <li>Shoot: Space</li>
-      <li>Build block in front: B</li>
+      <li>Build cover block: B</li>
       <li>Restart after end: Enter</li>
     </ul>
   </aside>
@@ -63,13 +63,29 @@
     duration:150,
     ended:false,
     arena:48,
+    shootFlash:0,
+    weaponKick:0
   };
+
+  const grassPatches = Array.from({length:260}, () => ({
+    x:(Math.random()*2-1)*44,
+    z:(Math.random()*2-1)*44,
+    h:0.3+Math.random()*0.55,
+    w:0.08+Math.random()*0.12,
+    tint:Math.random()*0.4
+  }));
+
+  const mountainRidges = Array.from({length:22}, (_,i)=>({
+    x:-70 + i*7,
+    h:35 + Math.sin(i*0.8)*8 + (Math.random()*6)
+  }));
 
   function reset(){
     state.player = {x:0,z:0,yaw:0,hp:100,speed:8};
     state.enemies=[]; state.bullets=[]; state.builds=[]; state.loot=[];
     state.score=0; state.craft=0; state.built=0;
     state.t0=performance.now(); state.ended=false;
+    state.shootFlash=0; state.weaponKick=0;
     spawnEnemies(12);
   }
 
@@ -104,11 +120,12 @@
     const rift=curRift();
     const speed=20*rift.bulletSpeed;
     state.bullets.push({x:state.player.x,z:state.player.z,vx:Math.cos(state.player.yaw)*speed,vz:Math.sin(state.player.yaw)*speed,ttl:1.8});
+    state.shootFlash = 0.12;
+    state.weaponKick = 1;
   }
 
   function lineBlocked(x1,z1,x2,z2){
     for(const b of state.builds){
-      // segment-AABB coarse check
       const minX=b.x-b.w/2,maxX=b.x+b.w/2,minZ=b.z-b.d/2,maxZ=b.z+b.d/2;
       for(let t=0;t<=1;t+=0.08){
         const x=x1+(x2-x1)*t, z=z1+(z2-z1)*t;
@@ -123,6 +140,8 @@
     const left=Math.max(0,state.duration-elapsed);
     const rift=curRift();
     if(left<=0||state.player.hp<=0) state.ended=true;
+    state.shootFlash=Math.max(0,state.shootFlash-dt);
+    state.weaponKick=Math.max(0,state.weaponKick-dt*6);
 
     if(!state.ended){
       let f=0,s=0;
@@ -184,7 +203,7 @@
     statusEl.textContent = state.ended
       ? `Match ended — ${state.player.hp>0?'Extracted':'Downed'} | Press Enter to restart`
       : `Time: ${Math.ceil(left)}s | HP: ${Math.max(0,Math.round(state.player.hp))}`;
-    riftEl.textContent = `Rift: ${rift.name} | Effects: player x${rift.playerSpeed.toFixed(2)}, enemy x${rift.enemySpeed.toFixed(2)}, wall armor x${rift.wallArmor.toFixed(2)}`;
+    riftEl.textContent = `Rift: ${rift.name} | player x${rift.playerSpeed.toFixed(2)} | enemy x${rift.enemySpeed.toFixed(2)} | bullet x${rift.bulletSpeed.toFixed(2)} | wall armor x${rift.wallArmor.toFixed(2)}`;
     scoreEl.textContent = `Score ${state.score} | Built ${state.built} | Craft ${state.craft} | Enemies ${state.enemies.length}`;
   }
 
@@ -198,9 +217,42 @@
     return { x:canvas.width/2 + cx*f, y:canvas.height*0.62 - wy*f, s:f };
   }
 
+  function drawSkyAndMountains(){
+    const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+    grad.addColorStop(0,'#17264e');
+    grad.addColorStop(0.55,'#203972');
+    grad.addColorStop(1,'#0a1126');
+    ctx.fillStyle=grad; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // stars/fog dots
+    for(let i=0;i<80;i++){
+      const x=(i*157)%canvas.width;
+      const y=30+((i*47)%220);
+      ctx.fillStyle='rgba(220,235,255,0.25)';
+      ctx.fillRect(x,y,2,2);
+    }
+
+    // mountain silhouette layers
+    function ridge(baseY,col,amp){
+      ctx.beginPath();
+      ctx.moveTo(0,baseY);
+      for(let i=0;i<mountainRidges.length;i++){
+        const m=mountainRidges[i];
+        const sx=(i/(mountainRidges.length-1))*canvas.width;
+        const sy=baseY - (m.h*amp) + Math.sin((i+performance.now()*0.00005))*5;
+        ctx.lineTo(sx,sy);
+      }
+      ctx.lineTo(canvas.width,canvas.height);
+      ctx.lineTo(0,canvas.height);
+      ctx.closePath();
+      ctx.fillStyle=col; ctx.fill();
+    }
+    ridge(canvas.height*0.54,'#102143',0.95);
+    ridge(canvas.height*0.60,'#0d1b38',0.70);
+    ridge(canvas.height*0.66,'#0a162d',0.45);
+  }
+
   function drawFloor(){
-    ctx.fillStyle='#0a1126';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
     for(let i=-state.arena;i<=state.arena;i+=2){
       drawLine3D(-state.arena,i,0,state.arena,i,0,'#1a2a52');
       drawLine3D(i,-state.arena,0,i,state.arena,0,'#1a2a52');
@@ -217,6 +269,22 @@
     ctx.strokeStyle=col; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
   }
 
+  function drawGrass(){
+    for(const g of grassPatches){
+      const p=project(g.x,g.z,0);
+      const p2=project(g.x,g.z,g.h);
+      if(!p||!p2) continue;
+      const sway=Math.sin((performance.now()*0.004)+(g.x*0.9+g.z))*1.3;
+      ctx.strokeStyle=`rgba(${40+g.tint*80},${120+g.tint*80},${60+g.tint*40},0.7)`;
+      ctx.lineWidth=Math.max(1,g.w*p.s*8);
+      ctx.beginPath();
+      ctx.moveTo(p.x,p.y);
+      ctx.lineTo(p2.x+sway,p2.y);
+      ctx.stroke();
+    }
+    ctx.lineWidth=1;
+  }
+
   function drawCube(x,z,w,h,d,color){
     const p=[
       project(x-w/2,z-d/2,0), project(x+w/2,z-d/2,0), project(x+w/2,z+d/2,0), project(x-w/2,z+d/2,0),
@@ -225,17 +293,64 @@
     if(p.some(v=>!v)) return;
     ctx.fillStyle=color;
     ctx.globalAlpha=0.9;
-    // top
     ctx.beginPath(); ctx.moveTo(p[4].x,p[4].y); ctx.lineTo(p[5].x,p[5].y); ctx.lineTo(p[6].x,p[6].y); ctx.lineTo(p[7].x,p[7].y); ctx.closePath(); ctx.fill();
     ctx.globalAlpha=0.7;
-    // sides
     ctx.beginPath(); ctx.moveTo(p[0].x,p[0].y); ctx.lineTo(p[1].x,p[1].y); ctx.lineTo(p[5].x,p[5].y); ctx.lineTo(p[4].x,p[4].y); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.moveTo(p[1].x,p[1].y); ctx.lineTo(p[2].x,p[2].y); ctx.lineTo(p[6].x,p[6].y); ctx.lineTo(p[5].x,p[5].y); ctx.closePath(); ctx.fill();
     ctx.globalAlpha=1;
   }
 
+  function drawWeapon(){
+    const baseY = canvas.height - 115 + state.weaponKick*6;
+    const baseX = canvas.width*0.58;
+
+    // shadow
+    ctx.fillStyle='rgba(0,0,0,0.22)';
+    ctx.fillRect(baseX-170,baseY+56,260,22);
+
+    // stock
+    ctx.fillStyle='#3a414f';
+    ctx.fillRect(baseX-150,baseY+20,120,28);
+
+    // receiver
+    const grad=ctx.createLinearGradient(baseX-60,baseY,baseX+130,baseY+50);
+    grad.addColorStop(0,'#6d788f'); grad.addColorStop(0.5,'#8b97b1'); grad.addColorStop(1,'#4f5a72');
+    ctx.fillStyle=grad;
+    ctx.fillRect(baseX-30,baseY+6,180,44);
+
+    // barrel
+    ctx.fillStyle='#2d3444';
+    ctx.fillRect(baseX+145,baseY+18,120,12);
+
+    // muzzle
+    ctx.fillStyle='#95a5c7';
+    ctx.fillRect(baseX+262,baseY+16,10,16);
+
+    // magazine
+    ctx.fillStyle='#313a4b';
+    ctx.fillRect(baseX+40,baseY+46,24,48);
+
+    // accent lights
+    ctx.fillStyle='#6ad6ff';
+    ctx.fillRect(baseX+10,baseY+14,18,4);
+    ctx.fillRect(baseX+80,baseY+14,20,4);
+
+    if(state.shootFlash>0){
+      ctx.fillStyle=`rgba(255,220,150,${state.shootFlash*7})`;
+      ctx.beginPath();
+      ctx.moveTo(baseX+272,baseY+24);
+      ctx.lineTo(baseX+302,baseY+14);
+      ctx.lineTo(baseX+332,baseY+24);
+      ctx.lineTo(baseX+302,baseY+34);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
   function draw(){
+    drawSkyAndMountains();
     drawFloor();
+    drawGrass();
 
     const rift=curRift();
     const r=project(18,0,0);
@@ -252,7 +367,12 @@
 
     // crosshair
     ctx.strokeStyle='#d9e6ff';
-    ctx.beginPath(); ctx.moveTo(canvas.width/2-8,canvas.height/2); ctx.lineTo(canvas.width/2+8,canvas.height/2); ctx.moveTo(canvas.width/2,canvas.height/2-8); ctx.lineTo(canvas.width/2,canvas.height/2+8); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(canvas.width/2-10,canvas.height/2); ctx.lineTo(canvas.width/2+10,canvas.height/2);
+    ctx.moveTo(canvas.width/2,canvas.height/2-10); ctx.lineTo(canvas.width/2,canvas.height/2+10);
+    ctx.stroke();
+
+    drawWeapon();
   }
 
   window.addEventListener('keydown',e=>{
