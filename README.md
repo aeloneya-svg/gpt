@@ -12,20 +12,19 @@ Backend runs at `http://localhost:8080`.
 
 ## Play Right Now (no Docker / no Unity)
 
-Open this file directly in your browser:
+Run one command:
 
 ```bash
-# Linux
-xdg-open playable_now/index.html
-
-# macOS
-open playable_now/index.html
-
-# Windows (PowerShell)
-start playable_now/index.html
+./scripts/play_now.sh
 ```
 
-This instant demo now runs as a polished 3D arena prototype: layered mountains, dense procedural grass, two detailed weapon models (carbine + shotgun) with recoil/muzzle flash, move/shoot/build defensive blocks, collect crafting drops, survive rotating Rift modifiers with gameplay-changing stats, and finish a timed match.
+Then open:
+
+- `http://127.0.0.1:9000/playable_now/index.html`
+
+(Or pass a custom port: `./scripts/play_now.sh 7777`.)
+
+This instant demo runs as a polished 3D arena prototype: layered mountains, dense procedural grass, two detailed weapon models (carbine + shotgun) with recoil/muzzle flash, move/shoot/build defensive blocks, collect crafting drops, survive rotating Rift modifiers with gameplay-changing stats, and finish a timed match.
 
 ## Preflight
 

@@ -18,7 +18,7 @@ docker compose -f infra/docker-compose.yml up --build
 
 ## Instant playable demo
 ```bash
-python -m http.server 9000
+./scripts/play_now.sh
 # then open http://127.0.0.1:9000/playable_now/index.html
 ```
 

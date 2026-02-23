@@ -1,3 +1,4 @@
+- `../scripts/play_now.sh`: one-command launcher for the instant playable demo.
 - `../scripts/preflight.sh`: required local tooling check (node/npm/docker/python).
 - `smoke.sh`: backend health/login/analytics smoke check.
 - `backend/tests/unit/matchmaker.test.ts`: unit checks for party-first matchmaking.
