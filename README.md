@@ -25,7 +25,7 @@ open playable_now/index.html
 start playable_now/index.html
 ```
 
-This instant demo now runs as a richer 3D arena prototype: mountainous skybox layers, grass detail pass, detailed first-person weapon rendering, move/shoot/build defensive blocks, collect crafting drops, survive rotating Rift modifiers with gameplay-changing stats, and finish a timed match.
+This instant demo now runs as a polished 3D arena prototype: layered mountains, dense procedural grass, two detailed weapon models (carbine + shotgun) with recoil/muzzle flash, move/shoot/build defensive blocks, collect crafting drops, survive rotating Rift modifiers with gameplay-changing stats, and finish a timed match.
 
 ## Preflight
 
