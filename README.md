@@ -1,6 +1,6 @@
 # EchoRift Vertical Slice (Final Completion Pass)
 
-This repository delivers a runnable backend-centric vertical slice with authoritative match simulation, Rift liveops rotation, moderation flows, anti-cheat hooks, analytics snapshots, optional Postgres persistence, ethical monetization endpoints, and Unity client integration scripts.
+This repository delivers a runnable backend-centric vertical slice plus an instantly playable 3D browser prototype, with authoritative match simulation, Rift liveops rotation, moderation flows, anti-cheat hooks, analytics snapshots, optional Postgres persistence, ethical monetization endpoints, and Unity client integration scripts.
 
 ## One-command local stack
 
@@ -25,7 +25,7 @@ open playable_now/index.html
 start playable_now/index.html
 ```
 
-This instant demo includes a complete short-session loop: move, shoot, build, collect crafting drops, survive rotating Rift modifiers, and finish a timed match.
+This instant demo now runs as a 3D arena prototype: move, shoot, build defensive blocks, collect crafting drops, survive rotating Rift modifiers with gameplay-changing stats, and finish a timed match.
 
 ## Preflight
 

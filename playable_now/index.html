@@ -3,36 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EchoRift Play Now</title>
+  <title>EchoRift Play Now (3D)</title>
   <style>
-    body { margin:0; font-family:system-ui, sans-serif; background:#0b1020; color:#e5ecff; }
-    #wrap { display:grid; grid-template-columns:280px 1fr; height:100vh; }
-    #hud { padding:14px; border-right:1px solid #28324f; background:#101935; }
-    #hud h1 { font-size:18px; margin:0 0 12px; }
-    #hud p, #hud li { font-size:13px; line-height:1.4; }
-    #hud .metric { margin:8px 0; padding:8px; background:#162349; border-radius:8px; }
-    #game { display:block; width:100%; height:100%; background:#0b122b; }
-    .ok { color:#8ef7a4; }
+    html, body { margin:0; height:100%; overflow:hidden; background:#090f1f; color:#eaf0ff; font-family:system-ui,sans-serif; }
+    #wrap { display:grid; grid-template-columns:320px 1fr; height:100%; }
+    #hud { background:#101a36; border-right:1px solid #2b3a63; padding:14px; }
+    #hud h1 { margin:0 0 8px; font-size:18px; }
+    #hud p, #hud li { font-size:13px; line-height:1.35; }
+    .card { background:#18264d; border-radius:10px; padding:8px; margin:8px 0; }
+    #game { width:100%; height:100%; display:block; }
+    .ok { color:#89f7ad; }
   </style>
 </head>
 <body>
 <div id="wrap">
   <aside id="hud">
-    <h1>EchoRift — Play Now</h1>
-    <p class="ok">No install needed. Just play in this tab.</p>
-    <div class="metric" id="status"></div>
-    <div class="metric" id="rift"></div>
-    <div class="metric" id="score"></div>
+    <h1>EchoRift — 3D Play Now</h1>
+    <p class="ok">3D arena demo: Rift Skirmish loop in browser.</p>
+    <div id="status" class="card"></div>
+    <div id="rift" class="card"></div>
+    <div id="score" class="card"></div>
     <p><b>Controls</b></p>
     <ul>
       <li>Move: WASD</li>
-      <li>Shoot: Mouse click</li>
-      <li>Build wall: B</li>
-      <li>Rotate build: R</li>
-      <li>Restart match: Enter (after end)</li>
+      <li>Look: ← / →</li>
+      <li>Shoot: Space</li>
+      <li>Build block in front: B</li>
+      <li>Restart after end: Enter</li>
     </ul>
   </aside>
-  <canvas id="game" width="1280" height="720"></canvas>
+  <canvas id="game" width="1365" height="768"></canvas>
 </div>
 <script>
 (() => {
@@ -42,204 +42,235 @@
   const riftEl = document.getElementById('rift');
   const scoreEl = document.getElementById('score');
 
-  const state = {
-    keys: new Set(),
-    player: { x: 200, y: 350, r: 12, speed: 220, hp: 100, dir: 0 },
-    bullets: [],
-    enemies: [],
-    walls: [],
-    loot: [],
-    score: 0,
-    built: 0,
-    crafting: 0,
-    t0: performance.now(),
-    duration: 120,
-    riftIndex: 0,
-    buildRot: 0,
-    ended: false,
-  };
-
   const rifts = [
-    { name: 'LOW_GRAVITY', speedMul: 1.15, enemyMul: 0.85, color:'#7ac7ff' },
-    { name: 'SPEED_SURGE', speedMul: 1.35, enemyMul: 1.15, color:'#ffe07a' },
-    { name: 'INVERTED_GRAVITY', speedMul: 0.95, enemyMul: 1.0, color:'#ff8de4' },
-    { name: 'ABILITY_OVERCHARGE', speedMul: 1.2, enemyMul: 1.25, color:'#ff9d7a' },
+    { name:'LOW_GRAVITY', playerSpeed:1.20, enemySpeed:0.85, bulletSpeed:1.0, wallArmor:1.0, color:'#77c8ff' },
+    { name:'SPEED_SURGE', playerSpeed:1.35, enemySpeed:1.25, bulletSpeed:1.15, wallArmor:1.0, color:'#ffe48a' },
+    { name:'FORTIFIED_BUILDS', playerSpeed:1.0, enemySpeed:1.0, bulletSpeed:1.0, wallArmor:2.2, color:'#94ffb2' },
+    { name:'CHAOS_OVERCHARGE', playerSpeed:1.15, enemySpeed:1.35, bulletSpeed:1.35, wallArmor:0.85, color:'#ff9ecf' }
   ];
 
-  function reset() {
-    state.player = { x: 200, y: 350, r: 12, speed: 220, hp: 100, dir: 0 };
-    state.bullets = [];
-    state.enemies = [];
-    state.walls = [];
-    state.loot = [];
-    state.score = 0;
-    state.built = 0;
-    state.crafting = 0;
-    state.t0 = performance.now();
-    state.riftIndex = 0;
-    state.ended = false;
-    spawnWave(8);
+  const state = {
+    keys:new Set(),
+    player:null,
+    enemies:[],
+    bullets:[],
+    builds:[],
+    loot:[],
+    score:0,
+    craft:0,
+    built:0,
+    t0:0,
+    duration:150,
+    ended:false,
+    arena:48,
+  };
+
+  function reset(){
+    state.player = {x:0,z:0,yaw:0,hp:100,speed:8};
+    state.enemies=[]; state.bullets=[]; state.builds=[]; state.loot=[];
+    state.score=0; state.craft=0; state.built=0;
+    state.t0=performance.now(); state.ended=false;
+    spawnEnemies(12);
   }
 
-  function spawnWave(n) {
-    for (let i = 0; i < n; i++) {
-      const side = Math.random() < 0.5 ? 0 : 1;
-      state.enemies.push({
-        x: side ? canvas.width - 30 : 30,
-        y: 60 + Math.random() * (canvas.height - 120),
-        r: 11,
-        hp: 35,
-        speed: 70 + Math.random() * 35,
-      });
+  function spawnEnemies(n){
+    for(let i=0;i<n;i++){
+      const ang=Math.random()*Math.PI*2;
+      const rad=20+Math.random()*20;
+      state.enemies.push({x:Math.cos(ang)*rad,z:Math.sin(ang)*rad,hp:45,r:1.1,speed:3.5+Math.random()*1.4});
     }
   }
 
-  function spawnLoot(x,y){ state.loot.push({x,y,r:6,t:performance.now()}); }
+  function curRift(){
+    const elapsed=(performance.now()-state.t0)/1000;
+    const idx=Math.min(rifts.length-1,Math.floor(elapsed/35));
+    return rifts[idx];
+  }
 
-  window.addEventListener('keydown', (e) => {
-    state.keys.add(e.key.toLowerCase());
-    if (e.key.toLowerCase() === 'b' && !state.ended) {
-      state.walls.push({ x: state.player.x + Math.cos(state.buildRot) * 28, y: state.player.y + Math.sin(state.buildRot) * 28, w: 44, h: 12, hp: 60, rot: state.buildRot });
-      state.built += 1;
-    }
-    if (e.key.toLowerCase() === 'r') state.buildRot += Math.PI/2;
-    if (e.key === 'Enter' && state.ended) reset();
-  });
-  window.addEventListener('keyup', (e) => state.keys.delete(e.key.toLowerCase()));
-  canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-    state.player.dir = Math.atan2(my - state.player.y, mx - state.player.x);
-  });
-  canvas.addEventListener('click', () => {
-    if (state.ended) return;
-    const v = 420;
-    state.bullets.push({ x: state.player.x, y: state.player.y, vx: Math.cos(state.player.dir)*v, vy: Math.sin(state.player.dir)*v, r: 4 });
-  });
+  function tryBuild(){
+    if(state.ended) return;
+    const fx=state.player.x+Math.cos(state.player.yaw)*3.2;
+    const fz=state.player.z+Math.sin(state.player.yaw)*3.2;
+    if(Math.abs(fx)>state.arena-2||Math.abs(fz)>state.arena-2) return;
+    const tooClose=state.builds.some(b=>Math.hypot(b.x-fx,b.z-fz)<2.2);
+    if(tooClose) return;
+    const rift=curRift();
+    state.builds.push({x:fx,z:fz,w:2,h:2,d:2,hp:80*rift.wallArmor});
+    state.built++;
+  }
 
-  function tick(dt) {
-    const elapsed = (performance.now()-state.t0)/1000;
-    const left = Math.max(0, state.duration - elapsed);
-    if (left <= 0 || state.player.hp <= 0) state.ended = true;
+  function shoot(){
+    if(state.ended) return;
+    const rift=curRift();
+    const speed=20*rift.bulletSpeed;
+    state.bullets.push({x:state.player.x,z:state.player.z,vx:Math.cos(state.player.yaw)*speed,vz:Math.sin(state.player.yaw)*speed,ttl:1.8});
+  }
 
-    const rift = rifts[Math.min(rifts.length-1, Math.floor(elapsed / 30))];
-    state.riftIndex = Math.min(rifts.length-1, Math.floor(elapsed / 30));
-
-    if (!state.ended) {
-      let dx = 0, dy = 0;
-      if (state.keys.has('w')) dy -= 1;
-      if (state.keys.has('s')) dy += 1;
-      if (state.keys.has('a')) dx -= 1;
-      if (state.keys.has('d')) dx += 1;
-      const m = Math.hypot(dx,dy) || 1;
-      state.player.x += (dx/m) * state.player.speed * rift.speedMul * dt;
-      state.player.y += (dy/m) * state.player.speed * rift.speedMul * dt;
-      state.player.x = Math.max(20, Math.min(canvas.width-20, state.player.x));
-      state.player.y = Math.max(20, Math.min(canvas.height-20, state.player.y));
-
-      for (const b of state.bullets) { b.x += b.vx * dt; b.y += b.vy * dt; }
-      state.bullets = state.bullets.filter(b => b.x > -20 && b.x < canvas.width+20 && b.y > -20 && b.y < canvas.height+20);
-
-      for (const e of state.enemies) {
-        const ang = Math.atan2(state.player.y - e.y, state.player.x - e.x);
-        e.x += Math.cos(ang) * e.speed * rift.enemyMul * dt;
-        e.y += Math.sin(ang) * e.speed * rift.enemyMul * dt;
+  function lineBlocked(x1,z1,x2,z2){
+    for(const b of state.builds){
+      // segment-AABB coarse check
+      const minX=b.x-b.w/2,maxX=b.x+b.w/2,minZ=b.z-b.d/2,maxZ=b.z+b.d/2;
+      for(let t=0;t<=1;t+=0.08){
+        const x=x1+(x2-x1)*t, z=z1+(z2-z1)*t;
+        if(x>minX&&x<maxX&&z>minZ&&z<maxZ) return b;
       }
+    }
+    return null;
+  }
 
-      for (const b of state.bullets) {
-        for (const e of state.enemies) {
-          if (Math.hypot(b.x-e.x,b.y-e.y) < b.r + e.r) {
-            e.hp -= 20; b.x = -9999;
-            if (e.hp <= 0) { state.score += 25; spawnLoot(e.x,e.y); }
+  function update(dt){
+    const elapsed=(performance.now()-state.t0)/1000;
+    const left=Math.max(0,state.duration-elapsed);
+    const rift=curRift();
+    if(left<=0||state.player.hp<=0) state.ended=true;
+
+    if(!state.ended){
+      let f=0,s=0;
+      if(state.keys.has('w')) f+=1;
+      if(state.keys.has('s')) f-=1;
+      if(state.keys.has('a')) s-=1;
+      if(state.keys.has('d')) s+=1;
+      if(state.keys.has('arrowleft')) state.player.yaw-=1.9*dt;
+      if(state.keys.has('arrowright')) state.player.yaw+=1.9*dt;
+
+      const c=Math.cos(state.player.yaw), si=Math.sin(state.player.yaw);
+      const mvx=(c*f + -si*s)*state.player.speed*rift.playerSpeed;
+      const mvz=(si*f + c*s)*state.player.speed*rift.playerSpeed;
+      state.player.x=Math.max(-state.arena,Math.min(state.arena,state.player.x+mvx*dt));
+      state.player.z=Math.max(-state.arena,Math.min(state.arena,state.player.z+mvz*dt));
+
+      for(const b of state.bullets){ b.x+=b.vx*dt; b.z+=b.vz*dt; b.ttl-=dt; }
+      state.bullets=state.bullets.filter(b=>b.ttl>0&&Math.abs(b.x)<state.arena+5&&Math.abs(b.z)<state.arena+5);
+
+      for(const e of state.enemies){
+        const block=lineBlocked(e.x,e.z,state.player.x,state.player.z);
+        let tx=state.player.x,tz=state.player.z;
+        if(block){ tx=block.x; tz=block.z; }
+        const ang=Math.atan2(tz-e.z,tx-e.x);
+        const ex=e.x+Math.cos(ang)*e.speed*rift.enemySpeed*dt;
+        const ez=e.z+Math.sin(ang)*e.speed*rift.enemySpeed*dt;
+        const collision=state.builds.find(b=>Math.abs(ex-b.x)<(b.w/2+0.8)&&Math.abs(ez-b.z)<(b.d/2+0.8));
+        if(collision){ collision.hp-=16*dt/(rift.wallArmor); }
+        else { e.x=ex; e.z=ez; }
+      }
+      state.builds=state.builds.filter(b=>b.hp>0);
+
+      for(const b of state.bullets){
+        const hitBlock=state.builds.find(w=>Math.abs(b.x-w.x)<w.w/2&&Math.abs(b.z-w.z)<w.d/2);
+        if(hitBlock){ b.ttl=0; continue; }
+        for(const e of state.enemies){
+          if(Math.hypot(b.x-e.x,b.z-e.z)<1.2){
+            e.hp-=24; b.ttl=0;
+            if(e.hp<=0){ state.score+=30; state.loot.push({x:e.x,z:e.z,ttl:12}); }
+            break;
           }
         }
       }
-      state.enemies = state.enemies.filter(e => e.hp > 0);
+      state.enemies=state.enemies.filter(e=>e.hp>0);
 
-      for (const e of state.enemies) {
-        if (Math.hypot(e.x-state.player.x,e.y-state.player.y) < e.r + state.player.r) state.player.hp -= 20 * dt;
-        for (const w of state.walls) {
-          if (Math.abs(e.x - w.x) < w.w/2 && Math.abs(e.y - w.y) < w.h/2) { w.hp -= 35 * dt; }
-        }
+      for(const e of state.enemies){
+        if(Math.hypot(e.x-state.player.x,e.z-state.player.z)<1.6){ state.player.hp-=22*dt; }
       }
-      state.walls = state.walls.filter(w => w.hp > 0);
 
-      for (const l of state.loot) {
-        if (Math.hypot(l.x-state.player.x,l.y-state.player.y) < l.r + state.player.r) { l.t = -1; state.crafting += 1; state.score += 5; }
+      for(const l of state.loot){
+        l.ttl-=dt;
+        if(Math.hypot(l.x-state.player.x,l.z-state.player.z)<1.4){ l.ttl=0; state.craft++; state.score+=8; }
       }
-      state.loot = state.loot.filter(l => l.t > 0 && performance.now()-l.t < 15000);
+      state.loot=state.loot.filter(l=>l.ttl>0);
 
-      if (state.enemies.length < 6) spawnWave(3);
+      if(state.enemies.length<7) spawnEnemies(3);
     }
 
     statusEl.textContent = state.ended
-      ? `Match ended — ${state.player.hp > 0 ? 'Extracted!' : 'Downed'} (Press Enter to restart)`
-      : `Time Left: ${Math.ceil(left)}s | HP: ${Math.max(0,Math.round(state.player.hp))}`;
-    riftEl.textContent = `Active Rift: ${rifts[state.riftIndex].name}`;
-    scoreEl.textContent = `Score: ${state.score} | Build Pieces: ${state.built} | Craft Parts: ${state.crafting}`;
+      ? `Match ended — ${state.player.hp>0?'Extracted':'Downed'} | Press Enter to restart`
+      : `Time: ${Math.ceil(left)}s | HP: ${Math.max(0,Math.round(state.player.hp))}`;
+    riftEl.textContent = `Rift: ${rift.name} | Effects: player x${rift.playerSpeed.toFixed(2)}, enemy x${rift.enemySpeed.toFixed(2)}, wall armor x${rift.wallArmor.toFixed(2)}`;
+    scoreEl.textContent = `Score ${state.score} | Built ${state.built} | Craft ${state.craft} | Enemies ${state.enemies.length}`;
   }
 
-  function draw() {
-    const rift = rifts[state.riftIndex];
-    ctx.fillStyle = '#0b122b';
+  function project(wx,wz,wy=0){
+    const dx=wx-state.player.x, dz=wz-state.player.z;
+    const c=Math.cos(-state.player.yaw), s=Math.sin(-state.player.yaw);
+    const cx=dx*c - dz*s;
+    const cz=dx*s + dz*c;
+    if(cz<0.2) return null;
+    const f=420/cz;
+    return { x:canvas.width/2 + cx*f, y:canvas.height*0.62 - wy*f, s:f };
+  }
+
+  function drawFloor(){
+    ctx.fillStyle='#0a1126';
     ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    // Rift zone
-    ctx.beginPath();
-    ctx.fillStyle = rift.color + '33';
-    ctx.arc(canvas.width*0.68, canvas.height*0.45, 130, 0, Math.PI*2);
-    ctx.fill();
-
-    // walls
-    for (const w of state.walls) {
-      ctx.save();
-      ctx.translate(w.x,w.y); ctx.rotate(w.rot);
-      ctx.fillStyle = '#4b7cff';
-      ctx.fillRect(-w.w/2,-w.h/2,w.w,w.h);
-      ctx.restore();
+    for(let i=-state.arena;i<=state.arena;i+=2){
+      drawLine3D(-state.arena,i,0,state.arena,i,0,'#1a2a52');
+      drawLine3D(i,-state.arena,0,i,state.arena,0,'#1a2a52');
     }
-
-    // loot
-    for (const l of state.loot) {
-      ctx.fillStyle = '#ffd75f';
-      ctx.beginPath(); ctx.arc(l.x,l.y,l.r,0,Math.PI*2); ctx.fill();
-    }
-
-    // enemies
-    for (const e of state.enemies) {
-      ctx.fillStyle = '#ff6d7d';
-      ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill();
-    }
-
-    // bullets
-    for (const b of state.bullets) {
-      ctx.fillStyle = '#e8f1ff';
-      ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
-    }
-
-    // player
-    ctx.save();
-    ctx.translate(state.player.x, state.player.y);
-    ctx.rotate(state.player.dir);
-    ctx.fillStyle = '#7fffd4';
-    ctx.beginPath(); ctx.arc(0,0,state.player.r,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#bff';
-    ctx.fillRect(0,-3,16,6);
-    ctx.restore();
+    drawLine3D(-state.arena,-state.arena,0,-state.arena,state.arena,0,'#3a4d82');
+    drawLine3D(state.arena,-state.arena,0,state.arena,state.arena,0,'#3a4d82');
+    drawLine3D(-state.arena,-state.arena,0,state.arena,-state.arena,0,'#3a4d82');
+    drawLine3D(-state.arena,state.arena,0,state.arena,state.arena,0,'#3a4d82');
   }
 
-  let last = performance.now();
-  function frame(now) {
-    const dt = Math.min(0.033, (now-last)/1000);
-    last = now;
-    tick(dt);
-    draw();
-    requestAnimationFrame(frame);
+  function drawLine3D(x1,z1,y1,x2,z2,y2,col){
+    const a=project(x1,z1,y1), b=project(x2,z2,y2);
+    if(!a||!b) return;
+    ctx.strokeStyle=col; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
   }
 
-  reset();
-  requestAnimationFrame(frame);
+  function drawCube(x,z,w,h,d,color){
+    const p=[
+      project(x-w/2,z-d/2,0), project(x+w/2,z-d/2,0), project(x+w/2,z+d/2,0), project(x-w/2,z+d/2,0),
+      project(x-w/2,z-d/2,h), project(x+w/2,z-d/2,h), project(x+w/2,z+d/2,h), project(x-w/2,z+d/2,h)
+    ];
+    if(p.some(v=>!v)) return;
+    ctx.fillStyle=color;
+    ctx.globalAlpha=0.9;
+    // top
+    ctx.beginPath(); ctx.moveTo(p[4].x,p[4].y); ctx.lineTo(p[5].x,p[5].y); ctx.lineTo(p[6].x,p[6].y); ctx.lineTo(p[7].x,p[7].y); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha=0.7;
+    // sides
+    ctx.beginPath(); ctx.moveTo(p[0].x,p[0].y); ctx.lineTo(p[1].x,p[1].y); ctx.lineTo(p[5].x,p[5].y); ctx.lineTo(p[4].x,p[4].y); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(p[1].x,p[1].y); ctx.lineTo(p[2].x,p[2].y); ctx.lineTo(p[6].x,p[6].y); ctx.lineTo(p[5].x,p[5].y); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha=1;
+  }
+
+  function draw(){
+    drawFloor();
+
+    const rift=curRift();
+    const r=project(18,0,0);
+    if(r){ ctx.fillStyle=rift.color+'33'; ctx.beginPath(); ctx.arc(r.x,r.y,Math.max(24,160/r.s),0,Math.PI*2); ctx.fill(); }
+
+    for(const b of state.builds) drawCube(b.x,b.z,b.w,b.h,b.d,'#57a0ff');
+    for(const l of state.loot) drawCube(l.x,l.z,0.5,0.5,0.5,'#ffd36b');
+    for(const e of state.enemies) drawCube(e.x,e.z,1.2,1.6,1.2,'#ff6f86');
+
+    for(const b of state.bullets){
+      const p=project(b.x,b.z,0.7); if(!p) continue;
+      ctx.fillStyle='#eaf2ff'; ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(1,3*p.s/120),0,Math.PI*2); ctx.fill();
+    }
+
+    // crosshair
+    ctx.strokeStyle='#d9e6ff';
+    ctx.beginPath(); ctx.moveTo(canvas.width/2-8,canvas.height/2); ctx.lineTo(canvas.width/2+8,canvas.height/2); ctx.moveTo(canvas.width/2,canvas.height/2-8); ctx.lineTo(canvas.width/2,canvas.height/2+8); ctx.stroke();
+  }
+
+  window.addEventListener('keydown',e=>{
+    const k=e.key.toLowerCase();
+    state.keys.add(k);
+    if(k===' ') shoot();
+    if(k==='b') tryBuild();
+    if(e.key==='Enter'&&state.ended) reset();
+  });
+  window.addEventListener('keyup',e=>state.keys.delete(e.key.toLowerCase()));
+
+  let last=performance.now();
+  function loop(now){
+    const dt=Math.min(0.033,(now-last)/1000); last=now;
+    update(dt); draw(); requestAnimationFrame(loop);
+  }
+
+  reset(); requestAnimationFrame(loop);
 })();
 </script>
 </body>
