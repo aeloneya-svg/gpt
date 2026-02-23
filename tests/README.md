@@ -1,0 +1,6 @@
+- `../scripts/preflight.sh`: required local tooling check (node/npm/docker/python).
+- `smoke.sh`: backend health/login/analytics smoke check.
+- `backend/tests/unit/matchmaker.test.ts`: unit checks for party-first matchmaking.
+- `backend/tests/integration/runIntegration.ts`: 30-player flow + settings/store + liveops + anti-cheat + moderation + analytics checks.
+- `backend/tests/stress/simulate100.ts`: 100 simulated queue joins.
+- Manual instant-play check: open `playable_now/index.html` and verify move/shoot/build/rift cycle and match restart.

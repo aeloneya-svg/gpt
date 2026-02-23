@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EchoRift Play Now</title>
+  <style>
+    body { margin:0; font-family:system-ui, sans-serif; background:#0b1020; color:#e5ecff; }
+    #wrap { display:grid; grid-template-columns:280px 1fr; height:100vh; }
+    #hud { padding:14px; border-right:1px solid #28324f; background:#101935; }
+    #hud h1 { font-size:18px; margin:0 0 12px; }
+    #hud p, #hud li { font-size:13px; line-height:1.4; }
+    #hud .metric { margin:8px 0; padding:8px; background:#162349; border-radius:8px; }
+    #game { display:block; width:100%; height:100%; background:#0b122b; }
+    .ok { color:#8ef7a4; }
+  </style>
+</head>
+<body>
+<div id="wrap">
+  <aside id="hud">
+    <h1>EchoRift — Play Now</h1>
+    <p class="ok">No install needed. Just play in this tab.</p>
+    <div class="metric" id="status"></div>
+    <div class="metric" id="rift"></div>
+    <div class="metric" id="score"></div>
+    <p><b>Controls</b></p>
+    <ul>
+      <li>Move: WASD</li>
+      <li>Shoot: Mouse click</li>
+      <li>Build wall: B</li>
+      <li>Rotate build: R</li>
+      <li>Restart match: Enter (after end)</li>
+    </ul>
+  </aside>
+  <canvas id="game" width="1280" height="720"></canvas>
+</div>
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('status');
+  const riftEl = document.getElementById('rift');
+  const scoreEl = document.getElementById('score');
+
+  const state = {
+    keys: new Set(),
+    player: { x: 200, y: 350, r: 12, speed: 220, hp: 100, dir: 0 },
+    bullets: [],
+    enemies: [],
+    walls: [],
+    loot: [],
+    score: 0,
+    built: 0,
+    crafting: 0,
+    t0: performance.now(),
+    duration: 120,
+    riftIndex: 0,
+    buildRot: 0,
+    ended: false,
+  };
+
+  const rifts = [
+    { name: 'LOW_GRAVITY', speedMul: 1.15, enemyMul: 0.85, color:'#7ac7ff' },
+    { name: 'SPEED_SURGE', speedMul: 1.35, enemyMul: 1.15, color:'#ffe07a' },
+    { name: 'INVERTED_GRAVITY', speedMul: 0.95, enemyMul: 1.0, color:'#ff8de4' },
+    { name: 'ABILITY_OVERCHARGE', speedMul: 1.2, enemyMul: 1.25, color:'#ff9d7a' },
+  ];
+
+  function reset() {
+    state.player = { x: 200, y: 350, r: 12, speed: 220, hp: 100, dir: 0 };
+    state.bullets = [];
+    state.enemies = [];
+    state.walls = [];
+    state.loot = [];
+    state.score = 0;
+    state.built = 0;
+    state.crafting = 0;
+    state.t0 = performance.now();
+    state.riftIndex = 0;
+    state.ended = false;
+    spawnWave(8);
+  }
+
+  function spawnWave(n) {
+    for (let i = 0; i < n; i++) {
+      const side = Math.random() < 0.5 ? 0 : 1;
+      state.enemies.push({
+        x: side ? canvas.width - 30 : 30,
+        y: 60 + Math.random() * (canvas.height - 120),
+        r: 11,
+        hp: 35,
+        speed: 70 + Math.random() * 35,
+      });
+    }
+  }
+
+  function spawnLoot(x,y){ state.loot.push({x,y,r:6,t:performance.now()}); }
+
+  window.addEventListener('keydown', (e) => {
+    state.keys.add(e.key.toLowerCase());
+    if (e.key.toLowerCase() === 'b' && !state.ended) {
+      state.walls.push({ x: state.player.x + Math.cos(state.buildRot) * 28, y: state.player.y + Math.sin(state.buildRot) * 28, w: 44, h: 12, hp: 60, rot: state.buildRot });
+      state.built += 1;
+    }
+    if (e.key.toLowerCase() === 'r') state.buildRot += Math.PI/2;
+    if (e.key === 'Enter' && state.ended) reset();
+  });
+  window.addEventListener('keyup', (e) => state.keys.delete(e.key.toLowerCase()));
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    state.player.dir = Math.atan2(my - state.player.y, mx - state.player.x);
+  });
+  canvas.addEventListener('click', () => {
+    if (state.ended) return;
+    const v = 420;
+    state.bullets.push({ x: state.player.x, y: state.player.y, vx: Math.cos(state.player.dir)*v, vy: Math.sin(state.player.dir)*v, r: 4 });
+  });
+
+  function tick(dt) {
+    const elapsed = (performance.now()-state.t0)/1000;
+    const left = Math.max(0, state.duration - elapsed);
+    if (left <= 0 || state.player.hp <= 0) state.ended = true;
+
+    const rift = rifts[Math.min(rifts.length-1, Math.floor(elapsed / 30))];
+    state.riftIndex = Math.min(rifts.length-1, Math.floor(elapsed / 30));
+
+    if (!state.ended) {
+      let dx = 0, dy = 0;
+      if (state.keys.has('w')) dy -= 1;
+      if (state.keys.has('s')) dy += 1;
+      if (state.keys.has('a')) dx -= 1;
+      if (state.keys.has('d')) dx += 1;
+      const m = Math.hypot(dx,dy) || 1;
+      state.player.x += (dx/m) * state.player.speed * rift.speedMul * dt;
+      state.player.y += (dy/m) * state.player.speed * rift.speedMul * dt;
+      state.player.x = Math.max(20, Math.min(canvas.width-20, state.player.x));
+      state.player.y = Math.max(20, Math.min(canvas.height-20, state.player.y));
+
+      for (const b of state.bullets) { b.x += b.vx * dt; b.y += b.vy * dt; }
+      state.bullets = state.bullets.filter(b => b.x > -20 && b.x < canvas.width+20 && b.y > -20 && b.y < canvas.height+20);
+
+      for (const e of state.enemies) {
+        const ang = Math.atan2(state.player.y - e.y, state.player.x - e.x);
+        e.x += Math.cos(ang) * e.speed * rift.enemyMul * dt;
+        e.y += Math.sin(ang) * e.speed * rift.enemyMul * dt;
+      }
+
+      for (const b of state.bullets) {
+        for (const e of state.enemies) {
+          if (Math.hypot(b.x-e.x,b.y-e.y) < b.r + e.r) {
+            e.hp -= 20; b.x = -9999;
+            if (e.hp <= 0) { state.score += 25; spawnLoot(e.x,e.y); }
+          }
+        }
+      }
+      state.enemies = state.enemies.filter(e => e.hp > 0);
+
+      for (const e of state.enemies) {
+        if (Math.hypot(e.x-state.player.x,e.y-state.player.y) < e.r + state.player.r) state.player.hp -= 20 * dt;
+        for (const w of state.walls) {
+          if (Math.abs(e.x - w.x) < w.w/2 && Math.abs(e.y - w.y) < w.h/2) { w.hp -= 35 * dt; }
+        }
+      }
+      state.walls = state.walls.filter(w => w.hp > 0);
+
+      for (const l of state.loot) {
+        if (Math.hypot(l.x-state.player.x,l.y-state.player.y) < l.r + state.player.r) { l.t = -1; state.crafting += 1; state.score += 5; }
+      }
+      state.loot = state.loot.filter(l => l.t > 0 && performance.now()-l.t < 15000);
+
+      if (state.enemies.length < 6) spawnWave(3);
+    }
+
+    statusEl.textContent = state.ended
+      ? `Match ended — ${state.player.hp > 0 ? 'Extracted!' : 'Downed'} (Press Enter to restart)`
+      : `Time Left: ${Math.ceil(left)}s | HP: ${Math.max(0,Math.round(state.player.hp))}`;
+    riftEl.textContent = `Active Rift: ${rifts[state.riftIndex].name}`;
+    scoreEl.textContent = `Score: ${state.score} | Build Pieces: ${state.built} | Craft Parts: ${state.crafting}`;
+  }
+
+  function draw() {
+    const rift = rifts[state.riftIndex];
+    ctx.fillStyle = '#0b122b';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Rift zone
+    ctx.beginPath();
+    ctx.fillStyle = rift.color + '33';
+    ctx.arc(canvas.width*0.68, canvas.height*0.45, 130, 0, Math.PI*2);
+    ctx.fill();
+
+    // walls
+    for (const w of state.walls) {
+      ctx.save();
+      ctx.translate(w.x,w.y); ctx.rotate(w.rot);
+      ctx.fillStyle = '#4b7cff';
+      ctx.fillRect(-w.w/2,-w.h/2,w.w,w.h);
+      ctx.restore();
+    }
+
+    // loot
+    for (const l of state.loot) {
+      ctx.fillStyle = '#ffd75f';
+      ctx.beginPath(); ctx.arc(l.x,l.y,l.r,0,Math.PI*2); ctx.fill();
+    }
+
+    // enemies
+    for (const e of state.enemies) {
+      ctx.fillStyle = '#ff6d7d';
+      ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill();
+    }
+
+    // bullets
+    for (const b of state.bullets) {
+      ctx.fillStyle = '#e8f1ff';
+      ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
+    }
+
+    // player
+    ctx.save();
+    ctx.translate(state.player.x, state.player.y);
+    ctx.rotate(state.player.dir);
+    ctx.fillStyle = '#7fffd4';
+    ctx.beginPath(); ctx.arc(0,0,state.player.r,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#bff';
+    ctx.fillRect(0,-3,16,6);
+    ctx.restore();
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, (now-last)/1000);
+    last = now;
+    tick(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

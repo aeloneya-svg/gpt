@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echorift-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: echorift-backend
+  template:
+    metadata:
+      labels:
+        app: echorift-backend
+    spec:
+      containers:
+        - name: backend
+          image: echorift/backend:0.1.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echorift-backend
+spec:
+  selector:
+    app: echorift-backend
+  ports:
+    - port: 80
+      targetPort: 8080
