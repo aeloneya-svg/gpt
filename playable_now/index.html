@@ -23,6 +23,8 @@
     <div id="rift" class="card"></div>
     <div id="score" class="card"></div>
     <div id="weapon" class="card"></div>
+    <div id="settings" class="card"></div>
+    <div id="debug" class="card"></div>
     <p><b>Controls</b></p>
     <ul>
       <li>Move: WASD</li>
@@ -45,6 +47,8 @@
   const riftEl = document.getElementById('rift');
   const scoreEl = document.getElementById('score');
   const weaponEl = document.getElementById('weapon');
+  const settingsEl = document.getElementById('settings');
+  const debugEl = document.getElementById('debug');
 
   const weapons = {
     carbine: { name:'VX Carbine', cooldown:0.14, damage:22, speed:30, spread:0.02, pellets:1, recoil:0.5 },
@@ -64,6 +68,8 @@
     mouseY:0,
     cameraYaw:0,
     cameraPitch:-0.24,
+    targetYaw:0,
+    targetPitch:-0.24,
     player:null,
     enemies:[],
     bullets:[],
@@ -86,6 +92,20 @@
     grass:Array.from({length:320},()=>({x:(Math.random()*2-1)*48,z:(Math.random()*2-1)*48,h:0.25+Math.random()*0.5})),
     mountains:Array.from({length:40},(_,i)=>18+Math.sin(i*0.53)*6+Math.random()*6),
     riftAnchors:[{x:16,z:0},{x:-18,z:14},{x:8,z:-20},{x:-12,z:-16}],
+    settings:{
+      sensitivity:1.0,
+      invertY:false,
+      cameraSmooth:0.18,
+      showMinimap:true,
+      showDebug:true
+    },
+    dust:Array.from({length:140},()=>({
+      x:(Math.random()*2-1)*50,
+      z:(Math.random()*2-1)*50,
+      y:Math.random()*0.22,
+      size:0.05+Math.random()*0.12,
+      drift:0.25+Math.random()*0.4
+    })),
   };
 
   function resize(){
@@ -95,6 +115,58 @@
   }
   window.addEventListener('resize', resize); resize();
 
+  function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+  function nowish(){ return performance.now(); }
+
+  function setupSettingsUI(){
+    settingsEl.innerHTML = `
+      <b>Polish Settings</b><br/>
+      <label>Sensitivity <span id="sensVal">1.00</span></label>
+      <input id="sens" type="range" min="0.4" max="2.4" value="1" step="0.05" style="width:100%" />
+      <label>Camera Smooth <span id="smoothVal">0.18</span></label>
+      <input id="smooth" type="range" min="0.05" max="0.4" value="0.18" step="0.01" style="width:100%" />
+      <label style="display:block;margin-top:6px"><input id="invertY" type="checkbox" /> Invert Y</label>
+      <label style="display:block"><input id="showMinimap" type="checkbox" checked /> Show Minimap</label>
+      <label style="display:block"><input id="showDebug" type="checkbox" checked /> Show Debug</label>
+    `;
+
+    const sens = settingsEl.querySelector('#sens');
+    const smooth = settingsEl.querySelector('#smooth');
+    const invertY = settingsEl.querySelector('#invertY');
+    const showMinimap = settingsEl.querySelector('#showMinimap');
+    const showDebug = settingsEl.querySelector('#showDebug');
+    const sensVal = settingsEl.querySelector('#sensVal');
+    const smoothVal = settingsEl.querySelector('#smoothVal');
+
+    const apply = ()=>{
+      state.settings.sensitivity = Number(sens.value);
+      state.settings.cameraSmooth = Number(smooth.value);
+      state.settings.invertY = invertY.checked;
+      state.settings.showMinimap = showMinimap.checked;
+      state.settings.showDebug = showDebug.checked;
+      sensVal.textContent = state.settings.sensitivity.toFixed(2);
+      smoothVal.textContent = state.settings.cameraSmooth.toFixed(2);
+      localStorage.setItem('echorift_settings', JSON.stringify(state.settings));
+    };
+
+    [sens,smooth,invertY,showMinimap,showDebug].forEach(el=>el.addEventListener('input',apply));
+
+    try{
+      const loaded = JSON.parse(localStorage.getItem('echorift_settings')||'null');
+      if(loaded){
+        state.settings = {...state.settings,...loaded};
+        sens.value = String(state.settings.sensitivity);
+        smooth.value = String(state.settings.cameraSmooth);
+        invertY.checked = !!state.settings.invertY;
+        showMinimap.checked = !!state.settings.showMinimap;
+        showDebug.checked = !!state.settings.showDebug;
+      }
+    }catch(e){}
+    apply();
+  }
+
+  setupSettingsUI();
+
   function reset(){
     state.player = { x:0, y:0, z:0, vx:0, vy:0, vz:0, yaw:0, hp:100, radius:0.9 };
     state.enemies=[]; state.bullets=[]; state.builds=[]; state.loot=[];
@@ -103,6 +175,7 @@
     state.fireCooldown=0; state.buildCooldown=0;
     state.hitMarker=0; state.damageFlash=0;
     state.cameraYaw=0; state.cameraPitch=-0.24;
+    state.targetYaw=0; state.targetPitch=-0.24;
     spawnEnemies(12);
   }
 
@@ -213,6 +286,7 @@
   function update(dt){
     if(state.paused){ statusEl.textContent='Paused (P to resume)'; return; }
     const elapsed=(performance.now()-state.t0)/1000;
+    const fps = 1/Math.max(0.001,dt);
     const left=Math.max(0,state.duration-elapsed);
     const r=currentRift();
     if(left<=0||state.player.hp<=0) state.ended=true;
@@ -221,6 +295,10 @@
     state.buildCooldown=Math.max(0,state.buildCooldown-dt);
     state.hitMarker=Math.max(0,state.hitMarker-dt*2.4);
     state.damageFlash=Math.max(0,state.damageFlash-dt*3.2);
+
+    const smooth = clamp(state.settings.cameraSmooth,0.05,0.5);
+    state.cameraYaw += (state.targetYaw - state.cameraYaw) * Math.min(1, dt / smooth);
+    state.cameraPitch += (state.targetPitch - state.cameraPitch) * Math.min(1, dt / smooth);
 
     if(!state.ended){
       const k=state.keys;
@@ -244,6 +322,17 @@
       if(state.player.y<0){ state.player.y=0; state.player.vy=0; }
       state.player.x=Math.max(-state.arena,Math.min(state.arena,state.player.x));
       state.player.z=Math.max(-state.arena,Math.min(state.arena,state.player.z));
+
+      for(const d of state.dust){
+        d.x += Math.sin((nowish()+d.z)*0.01)*d.drift*dt;
+        d.z += Math.cos((nowish()+d.x)*0.01)*d.drift*dt;
+        d.y += Math.sin((nowish()*0.002)+(d.x+d.z))*0.03*dt;
+        if(d.x>state.arena) d.x=-state.arena;
+        if(d.x<-state.arena) d.x=state.arena;
+        if(d.z>state.arena) d.z=-state.arena;
+        if(d.z<-state.arena) d.z=state.arena;
+        d.y=clamp(d.y,0.01,0.35);
+      }
 
       for(const b of state.bullets){ b.x+=b.vx*dt; b.y+=b.vy*dt; b.z+=b.vz*dt; b.ttl-=dt; }
       state.bullets=state.bullets.filter(b=>b.ttl>0&&Math.abs(b.x)<state.arena+8&&Math.abs(b.z)<state.arena+8);
@@ -291,6 +380,7 @@
     riftEl.textContent = `Rift ${r.name} @ (${Math.round(r.anchor.x)}, ${Math.round(r.anchor.z)}) | Move x${r.move.toFixed(2)} Enemy x${r.enemy.toFixed(2)} Gravity x${r.gravity.toFixed(2)} Damage x${r.damage.toFixed(2)} Build x${r.buildArmor.toFixed(2)}`;
     scoreEl.textContent = `Score ${state.score} | Craft ${state.craft} | Built ${state.built} | Enemies ${state.enemies.length}`;
     weaponEl.textContent = `Weapon ${weapons[state.weapon].name} | 1/2 swap | Click shoot | B build`;
+    debugEl.textContent = state.settings.showDebug ? `FPS ${Math.round(fps)} | Cam(${state.cameraYaw.toFixed(2)}, ${state.cameraPitch.toFixed(2)}) | Bullets ${state.bullets.length} | Builds ${state.builds.length}` : 'Debug hidden';
   }
 
   function drawMountainsAndSky(){
@@ -441,6 +531,26 @@
   }
 
 
+  function drawRiftPulseArcs(r){
+    const rings=3;
+    for(let i=0;i<rings;i++){
+      const rr=2.5+i*1.4+Math.sin(performance.now()*0.0016+i)*0.35;
+      const pts=[];
+      for(let a=0;a<=Math.PI*2+0.001;a+=Math.PI/22){
+        pts.push(project(r.anchor.x+Math.cos(a)*rr,0.05,r.anchor.z+Math.sin(a)*rr));
+      }
+      ctx.strokeStyle=r.tint + (i===0?'66':i===1?'44':'2a');
+      ctx.beginPath();
+      let start=false;
+      for(const p of pts){
+        if(!p) continue;
+        if(!start){ ctx.moveTo(p.x,p.y); start=true; }
+        else ctx.lineTo(p.x,p.y);
+      }
+      ctx.stroke();
+    }
+  }
+
   function drawRiftBeacon(r){
     const pulse=0.6+Math.sin(performance.now()*0.006+r.idx)*0.4;
     const base=project(r.anchor.x,0,r.anchor.z);
@@ -477,13 +587,142 @@
     }
   }
 
+  function drawDustLayer(){
+    for(const d of state.dust){
+      const p=project(d.x,d.y,d.z);
+      if(!p) continue;
+      const r=Math.max(0.6,d.size*p.s*0.08);
+      const alpha=clamp(0.08 + (130/p.z)*0.015,0.04,0.16);
+      ctx.fillStyle=`rgba(223,194,143,${alpha.toFixed(3)})`;
+      circle(p.x,p.y,r,true);
+    }
+  }
+
+  function drawHeatHaze(){
+    const t=performance.now()*0.001;
+    const bands=9;
+    for(let i=0;i<bands;i++){
+      const y=canvas.height*(0.55+i*0.05);
+      const wave=Math.sin(t*1.4 + i*0.7)*8;
+      const grad=ctx.createLinearGradient(0,y,0,y+24);
+      grad.addColorStop(0,'rgba(255,220,170,0.00)');
+      grad.addColorStop(0.5,`rgba(255,220,170,${0.04 + i*0.003})`);
+      grad.addColorStop(1,'rgba(255,220,170,0.00)');
+      ctx.fillStyle=grad;
+      ctx.fillRect(wave,y,canvas.width,24);
+    }
+  }
+
+  function drawArenaRings(){
+    const step=10;
+    for(let r=step;r<state.arena;r+=step){
+      const points=[];
+      for(let a=0;a<=Math.PI*2+0.001;a+=Math.PI/18){
+        points.push(project(Math.cos(a)*r,0.01,Math.sin(a)*r));
+      }
+      ctx.strokeStyle='rgba(180,145,95,0.18)';
+      ctx.beginPath();
+      let started=false
+      for(const p of points){
+        if(!p) continue;
+        if(!started){ ctx.moveTo(p.x,p.y); started=true; }
+        else ctx.lineTo(p.x,p.y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  function drawContextTips(){
+    const tips=[];
+    if(state.player.hp<35) tips.push('Low HP: kite enemies and build cover (B).');
+    if(state.enemies.length>16) tips.push('High pressure: rotate and avoid standing still.');
+    if(state.fireCooldown>0.22) tips.push('Use short bursts for better control.');
+    if(state.craft>0) tips.push(`Craft picked: ${state.craft}. Keep momentum.`);
+    if(state.player.y===0 && state.keys.has(' ')) tips.push('Jump timing helps dodge melee swarms.');
+    if(!tips.length) tips.push('Tip: Keep Rift beacon in view and play near cover.');
+
+    const w=360;
+    const h=18 + tips.length*16;
+    const x=16;
+    const y=canvas.height-h-16;
+
+    ctx.fillStyle='rgba(22,18,12,0.34)';
+    roundRect(x,y,w,h,10,true);
+    ctx.strokeStyle='rgba(244,218,168,0.45)';
+    roundRect(x,y,w,h,10,false);
+    ctx.fillStyle='#f4e7cc';
+    ctx.fillText('Context Tips',x+10,y+14);
+
+    for(let i=0;i<tips.length;i++){
+      const t=tips[i];
+      ctx.fillStyle='rgba(255,245,222,0.9)';
+      ctx.fillText('• '+t,x+10,y+30+i*15);
+    }
+  }
+
+  function drawCompass(){
+    const cx=canvas.width-130, cy=36;
+    ctx.fillStyle='rgba(0,0,0,0.25)';
+    roundRect(cx-95,cy-20,190,28,8,true);
+    const dirs=[['N',0],['E',Math.PI/2],['S',Math.PI],['W',-Math.PI/2]];
+    ctx.fillStyle='#f5f2de';
+    for(const [name,a] of dirs){
+      const rel=((a-state.cameraYaw+Math.PI*3)%(Math.PI*2))-Math.PI;
+      const x=cx+rel*38;
+      if(x<cx-85||x>cx+85) continue;
+      ctx.globalAlpha=Math.max(0.25,1-Math.abs(rel));
+      ctx.fillText(name,x,cy-2);
+    }
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='#f0e8c0';
+    ctx.beginPath(); ctx.moveTo(cx,cy-18); ctx.lineTo(cx,cy+6); ctx.stroke();
+  }
+
+  function drawMinimap(){
+    if(!state.settings.showMinimap) return;
+    const size=148, pad=16;
+    const x=canvas.width-size-pad, y=canvas.height-size-pad;
+    ctx.fillStyle='rgba(14,14,14,0.28)';
+    roundRect(x,y,size,size,12,true);
+    ctx.strokeStyle='rgba(240,220,180,0.55)';
+    roundRect(x,y,size,size,12,false);
+
+    const s=(size-20)/(state.arena*2);
+    const wx=(v)=>x+10+(v+state.arena)*s;
+    const wz=(v)=>y+10+(v+state.arena)*s;
+
+    const r=currentRift();
+    ctx.fillStyle=r.tint;
+    circle(wx(r.anchor.x),wz(r.anchor.z),4,true);
+
+    for(const b of state.builds){
+      ctx.fillStyle='#8f97aa';
+      ctx.fillRect(wx(b.x)-2,wz(b.z)-2,4,4);
+    }
+    for(const e of state.enemies){
+      ctx.fillStyle='#d27752';
+      ctx.fillRect(wx(e.x)-2,wz(e.z)-2,4,4);
+    }
+
+    ctx.fillStyle='#87d5ff';
+    const px=wx(state.player.x), pz=wz(state.player.z);
+    circle(px,pz,4,true);
+    const f=getForward();
+    ctx.strokeStyle='#ffffff';
+    ctx.beginPath(); ctx.moveTo(px,pz); ctx.lineTo(px+f.x*10,pz+f.z*10); ctx.stroke();
+  }
+
   function draw(){
     drawMountainsAndSky();
     drawGridAndGrass();
+    drawArenaRings();
+    drawHeatHaze();
     const r=currentRift();
+    drawRiftPulseArcs(r);
     drawRiftBeacon(r);
 
     drawBox(0,-0.14,0,state.arena*2,0.12,state.arena*2,'#d9b578');
+    drawDustLayer();
 
     const renderables=[];
     for(const b of state.builds){
@@ -524,16 +763,21 @@
     ctx.moveTo(canvas.width/2,canvas.height/2-8); ctx.lineTo(canvas.width/2,canvas.height/2+8);
     ctx.stroke();
 
+    drawCompass();
+    drawMinimap();
+    drawContextTips();
     drawFeedbackOverlay();
   }
 
   canvas.addEventListener('mousemove', (e)=>{
     if(document.pointerLockElement!==canvas) return;
-    state.cameraYaw += e.movementX*0.0028;
-    if(state.cameraYaw>Math.PI) state.cameraYaw-=Math.PI*2;
-    if(state.cameraYaw<-Math.PI) state.cameraYaw+=Math.PI*2;
-    state.cameraPitch = Math.max(-0.55,Math.min(0.35,state.cameraPitch - e.movementY*0.0018));
-    state.player.yaw = state.cameraYaw;
+    const sens = 0.0028 * state.settings.sensitivity;
+    state.targetYaw += e.movementX*sens;
+    if(state.targetYaw>Math.PI) state.targetYaw-=Math.PI*2;
+    if(state.targetYaw<-Math.PI) state.targetYaw+=Math.PI*2;
+    const ySign = state.settings.invertY ? 1 : -1;
+    state.targetPitch = clamp(state.targetPitch + e.movementY*0.0018*ySign,-0.55,0.35);
+    state.player.yaw = state.targetYaw;
   });
   canvas.addEventListener('click', ()=>{
     if(document.pointerLockElement!==canvas){ canvas.requestPointerLock?.(); return; }
