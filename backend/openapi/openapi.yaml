@@ -1,0 +1,63 @@
+openapi: 3.0.3
+info:
+  title: EchoRift Vertical Slice API
+  version: 0.4.0
+paths:
+  /auth/login:
+    post:
+      summary: Login and provision test player
+  /matchmaking/join:
+    post:
+      summary: Join Rift Skirmish queue
+  /match/{id}/state:
+    get:
+      summary: Get authoritative match state
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+  /matches:
+    get:
+      summary: List matches
+  /builds/publish:
+    post:
+      summary: Publish creator build to Sandbox Hub
+  /builds/trending:
+    get:
+      summary: List trending builds
+  /players/{id}/settings:
+    get:
+      summary: Get player wellbeing/parental settings
+    post:
+      summary: Update wellbeing/parental settings
+  /store/catalog:
+    get:
+      summary: Get transparent cosmetic catalog
+  /store/purchase:
+    post:
+      summary: Purchase a cosmetic SKU with spend-cap checks
+  /anti-cheat/flag:
+    post:
+      summary: Submit anti-cheat flag signal
+  /admin/anti-cheat/flags:
+    get:
+      summary: List anti-cheat flags for review
+  /admin/rift-modifier:
+    post:
+      summary: Toggle active Rift modifier
+  /admin/active-matches:
+    get:
+      summary: List active matches
+  /analytics/summary:
+    get:
+      summary: Basic analytics summary
+  /analytics/cohorts:
+    get:
+      summary: 1/7/28-day active cohort snapshot
+  /reports:
+    post:
+      summary: Submit moderation report
+  /admin/reports:
+    get:
+      summary: List moderation reports

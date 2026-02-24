@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: echorift-data
+spec:
+  containers:
+    - name: postgres
+      image: postgres:16
+      env:
+        - name: POSTGRES_PASSWORD
+          value: echorift
+    - name: redis
+      image: redis:7
