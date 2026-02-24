@@ -63,6 +63,7 @@
     mouseX:0,
     mouseY:0,
     cameraYaw:0,
+    cameraPitch:-0.24,
     player:null,
     enemies:[],
     bullets:[],
@@ -96,7 +97,9 @@
     state.enemies=[]; state.bullets=[]; state.builds=[]; state.loot=[];
     state.score=0; state.craft=0; state.built=0;
     state.t0=performance.now(); state.paused=false; state.ended=false;
-    state.fireCooldown=0; state.buildCooldown=0; spawnEnemies(12);
+    state.fireCooldown=0; state.buildCooldown=0;
+    state.cameraYaw=0; state.cameraPitch=-0.24;
+    spawnEnemies(12);
   }
 
   function spawnEnemies(n){
@@ -137,7 +140,7 @@
       y: state.player.y + up,
       z: state.player.z - Math.cos(state.cameraYaw)*back,
       yaw: state.cameraYaw,
-      pitch: -0.18
+      pitch: state.cameraPitch
     };
   }
 
@@ -359,32 +362,26 @@
   }
 
   function drawEnemyModel(e){
-    // Inspired by provided image: lime creature body, one tall ear, big eyes, toothy mouth.
-    const body=project(e.x,1.0,e.z), top=project(e.x,2.4,e.z);
-    if(!body||!top) return;
-    const scale=Math.max(0.2, body.s/130);
-    const w=70*scale, h=95*scale;
-    const x=body.x-w/2, y=body.y-h*0.85;
+    const bob=Math.sin(performance.now()*0.004 + e.x*0.5 + e.z*0.5)*0.08;
+    const hit=e.hitFlash>0;
+    drawBox(e.x,0.15+bob,e.z,1.4,1.6,1.1, hit ? '#d6f58e' : '#9bb354');
+    drawBox(e.x,1.65+bob,e.z,1.05,0.9,0.9, hit ? '#cfe878' : '#a8c25d');
+    drawBox(e.x-0.55,0.28+bob,e.z,0.26,0.92,0.26,'#6d7f3e');
+    drawBox(e.x+0.55,0.28+bob,e.z,0.26,0.92,0.26,'#6d7f3e');
+    drawBox(e.x-0.26,0.0+bob,e.z,0.34,0.95,0.34,'#778b45');
+    drawBox(e.x+0.26,0.0+bob,e.z,0.34,0.95,0.34,'#778b45');
 
-    ctx.fillStyle = e.hitFlash>0 ? '#d7ff7b' : '#b6d544';
-    roundRect(x,y,w,h,16*scale,true);
-
-    // ear
-    ctx.fillStyle='#a8ca3d';
-    ctx.beginPath();
-    ctx.moveTo(x+w*0.25,y+h*0.05);
-    ctx.lineTo(x+w*0.12,y-h*0.28);
-    ctx.lineTo(x+w*0.38,y-h*0.05);
-    ctx.closePath(); ctx.fill();
-
-    // eyes
-    ctx.fillStyle='#f5b42f'; circle(x+w*0.35,y+h*0.35,10*scale,true); circle(x+w*0.65,y+h*0.36,12*scale,true);
-    ctx.fillStyle='#151515'; circle(x+w*0.37,y+h*0.36,4*scale,true); circle(x+w*0.67,y+h*0.37,5*scale,true);
-
-    // mouth
-    ctx.fillStyle='#7c3f2b'; roundRect(x+w*0.28,y+h*0.56,w*0.46,h*0.19,8*scale,true);
-    ctx.fillStyle='#ddd7a8';
-    for(let i=0;i<4;i++){ roundRect(x+w*(0.3+i*0.11),y+h*0.54,6*scale,9*scale,2*scale,true); }
+    const eyeL=project(e.x-0.24,1.86+bob,e.z+0.48), eyeR=project(e.x+0.24,1.86+bob,e.z+0.48), jaw=project(e.x,1.42+bob,e.z+0.55);
+    if(eyeL&&eyeR){
+      ctx.fillStyle='#f2c765'; circle(eyeL.x,eyeL.y,Math.max(2,5*eyeL.s/130),true); circle(eyeR.x,eyeR.y,Math.max(2,5*eyeR.s/130),true);
+      ctx.fillStyle='#131313'; circle(eyeL.x,eyeL.y,Math.max(1,2.5*eyeL.s/130),true); circle(eyeR.x,eyeR.y,Math.max(1,2.5*eyeR.s/130),true);
+    }
+    if(jaw){
+      const mw=Math.max(10,26*jaw.s/130), mh=Math.max(5,10*jaw.s/130);
+      ctx.fillStyle='#4c3d2d'; roundRect(jaw.x-mw/2,jaw.y-mh/2,mw,mh,3,true);
+      ctx.fillStyle='#c9c399';
+      for(let i=0;i<4;i++) roundRect(jaw.x-mw/2+3+i*(mw-8)/3,jaw.y-mh/2-2,2,4,1,true);
+    }
   }
 
   function roundRect(x,y,w,h,r,fill){
@@ -394,21 +391,29 @@
   }
   function circle(x,y,r,fill){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); if(fill) ctx.fill(); else ctx.stroke(); }
 
-  function drawWeaponOverlay(){
-    const w=weapons[state.weapon];
-    const baseX=canvas.width*0.70, baseY=canvas.height-95;
-    ctx.fillStyle='rgba(0,0,0,0.22)'; ctx.fillRect(baseX-165,baseY+55,270,20);
+  function drawWeaponModel3D(){
+    const p=state.player;
+    const f=getForward(), r=getRight();
+    const holdX=p.x + f.x*0.95 + r.x*0.46;
+    const holdZ=p.z + f.z*0.95 + r.z*0.46;
+    const y=1.06 + Math.sin(performance.now()*0.015)*0.02;
+
     if(state.weapon==='carbine'){
-      ctx.fillStyle='#434c60'; ctx.fillRect(baseX-150,baseY+22,120,26);
-      ctx.fillStyle='#7f8ca6'; ctx.fillRect(baseX-35,baseY+8,180,40);
-      ctx.fillStyle='#2b3244'; ctx.fillRect(baseX+140,baseY+18,120,12);
-      ctx.fillStyle='#65d5ff'; ctx.fillRect(baseX+20,baseY+14,20,4);
+      drawBox(holdX+f.x*0.55,y,holdZ+f.z*0.55,1.35,0.2,0.24,'#d5d8dc');
+      drawBox(holdX+f.x*0.05,y+0.05,holdZ+f.z*0.05,0.62,0.3,0.26,'#c5c7ca');
+      drawBox(holdX-f.x*0.42,y-0.08,holdZ-f.z*0.42,0.32,0.24,0.24,'#b8bbbfc9');
+      drawBox(holdX-r.x*0.12-f.x*0.05,y-0.26,holdZ-r.z*0.12-f.z*0.05,0.16,0.34,0.16,'#a9adb2');
+      drawBox(holdX+f.x*0.92,y+0.02,holdZ+f.z*0.92,0.38,0.1,0.1,'#8f949a');
     } else {
-      ctx.fillStyle='#5b4f45'; ctx.fillRect(baseX-160,baseY+24,130,26);
-      ctx.fillStyle='#7a6a5d'; ctx.fillRect(baseX-36,baseY+10,166,44);
-      ctx.fillStyle='#9e8f80'; ctx.fillRect(baseX+130,baseY+18,122,10);
-      ctx.fillStyle='#9e8f80'; ctx.fillRect(baseX+130,baseY+32,122,10);
+      drawBox(holdX+f.x*0.18,y+0.02,holdZ+f.z*0.18,0.86,0.28,0.22,'#e6e7ea');
+      drawBox(holdX+f.x*0.45,y+0.07,holdZ+f.z*0.45,0.54,0.18,0.2,'#cfd2d7');
+      drawBox(holdX-f.x*0.05-r.x*0.03,y-0.3,holdZ-f.z*0.05-r.z*0.03,0.2,0.46,0.16,'#0f0f10');
+      drawBox(holdX+f.x*0.75,y+0.05,holdZ+f.z*0.75,0.12,0.08,0.08,'#0f0f10');
     }
+
+    const baseX=canvas.width*0.70, baseY=canvas.height-95;
+    ctx.fillStyle='rgba(0,0,0,0.20)'; ctx.fillRect(baseX-165,baseY+55,290,22);
+    ctx.fillStyle='#dce6ff'; ctx.fillText(state.weapon==='carbine'?'Assault Rifle':'.49 Pistol',baseX-150,baseY+70);
     if(state.fireCooldown>0.02){
       ctx.fillStyle=`rgba(255,220,150,${Math.min(0.85,state.fireCooldown*6)})`;
       ctx.beginPath();
@@ -425,7 +430,11 @@
 
     for(const b of state.builds){
       const hp=b.hp/b.maxHp;
-      drawBox(b.x,0,b.z,b.w,b.h,b.d,hp>0.66?'#5ea6ff':hp>0.33?'#8eb3ff':'#c9d0ff');
+      const base=hp>0.66?'#6e7078':hp>0.33?'#7f838f':'#9fa6b6';
+      drawBox(b.x,0,b.z,b.w,b.h,b.d,base);
+      drawBox(b.x,1.88,b.z,b.w*0.96,0.15,b.d*0.96,'#b6bbc8');
+      drawBox(b.x-b.w*0.42,0,b.z,0.18,b.h,0.18,'#4a4f5c');
+      drawBox(b.x+b.w*0.42,0,b.z,0.18,b.h,0.18,'#4a4f5c');
     }
     for(const l of state.loot) drawBox(l.x,0,l.z,0.5,0.5,0.5,'#ffd66e');
     for(const e of state.enemies) drawEnemyModel(e);
@@ -440,24 +449,20 @@
     ctx.moveTo(canvas.width/2,canvas.height/2-8); ctx.lineTo(canvas.width/2,canvas.height/2+8);
     ctx.stroke();
 
-    drawWeaponOverlay();
+    drawWeaponModel3D();
   }
 
   canvas.addEventListener('mousemove', (e)=>{
-    const sensitivity=0.003;
-    if(document.pointerLockElement===canvas){
-      state.cameraYaw += e.movementX*sensitivity;
-    } else {
-      const rect=canvas.getBoundingClientRect();
-      const nx=(e.clientX-rect.left)/rect.width;
-      state.cameraYaw = (nx-0.5)*2.2;
-    }
+    if(document.pointerLockElement!==canvas) return;
+    state.cameraYaw += e.movementX*0.0028;
+    state.cameraPitch = Math.max(-0.55,Math.min(0.35,state.cameraPitch - e.movementY*0.0018));
     state.player.yaw = state.cameraYaw;
   });
   canvas.addEventListener('click', ()=>{
-    if(document.pointerLockElement!==canvas) canvas.requestPointerLock?.();
+    if(document.pointerLockElement!==canvas){ canvas.requestPointerLock?.(); return; }
     tryShoot();
   });
+  canvas.addEventListener('contextmenu',(e)=>e.preventDefault());
 
   window.addEventListener('keydown',(e)=>{
     const k=e.key.toLowerCase();
