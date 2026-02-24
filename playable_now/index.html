@@ -26,7 +26,7 @@
     <p><b>Controls</b></p>
     <ul>
       <li>Move: WASD</li>
-      <li>Aim: Mouse</li>
+      <li>Aim/Turn: Mouse (click game to lock cursor)</li>
       <li>Shoot: Left click</li>
       <li>Jump: Space</li>
       <li>Build cover in front: B</li>
@@ -96,7 +96,7 @@
     state.enemies=[]; state.bullets=[]; state.builds=[]; state.loot=[];
     state.score=0; state.craft=0; state.built=0;
     state.t0=performance.now(); state.paused=false; state.ended=false;
-    state.fireCooldown=0; spawnEnemies(12);
+    state.fireCooldown=0; state.buildCooldown=0; spawnEnemies(12);
   }
 
   function spawnEnemies(n){
@@ -133,30 +133,30 @@
   function getCamera(){
     const back=8.5, up=4.5;
     return {
-      x: state.player.x - Math.cos(state.cameraYaw)*back,
+      x: state.player.x - Math.sin(state.cameraYaw)*back,
       y: state.player.y + up,
-      z: state.player.z - Math.sin(state.cameraYaw)*back,
+      z: state.player.z - Math.cos(state.cameraYaw)*back,
       yaw: state.cameraYaw,
       pitch: -0.18
     };
   }
 
   function getForward(){
-    return { x:Math.cos(state.cameraYaw), z:Math.sin(state.cameraYaw) };
+    return { x:Math.sin(state.cameraYaw), z:Math.cos(state.cameraYaw) };
   }
 
   function getRight(){
     const f=getForward();
-    return { x:-f.z, z:f.x };
+    return { x:f.z, z:-f.x };
   }
 
   function getAimDir(){
     const cam=getCamera();
     const cp=Math.cos(cam.pitch), sp=Math.sin(cam.pitch);
     return {
-      x:Math.cos(cam.yaw)*cp,
+      x:Math.sin(cam.yaw)*cp,
       y:sp,
-      z:Math.sin(cam.yaw)*cp
+      z:Math.cos(cam.yaw)*cp
     };
   }
 
@@ -178,7 +178,7 @@
     const w=weapons[state.weapon], r=currentRift();
     const aim=getAimDir();
     const muzzle={x:state.player.x+aim.x*1.2,y:1.2,z:state.player.z+aim.z*1.2};
-    const baseYaw = Math.atan2(aim.z,aim.x);
+    const baseYaw = Math.atan2(aim.x,aim.z);
     const pitch=Math.asin(aim.y);
     for(let i=0;i<w.pellets;i++){
       const spread=(Math.random()*2-1)*w.spread;
@@ -186,7 +186,7 @@
       const py=pitch+spread*0.35;
       const speed=w.speed*r.fireRate;
       const cp=Math.cos(py);
-      state.bullets.push({x:muzzle.x,y:muzzle.y,z:muzzle.z,vx:Math.cos(yaw)*cp*speed,vy:Math.sin(py)*speed,vz:Math.sin(yaw)*cp*speed,ttl:1.5,damage:w.damage*r.damage});
+      state.bullets.push({x:muzzle.x,y:muzzle.y,z:muzzle.z,vx:Math.sin(yaw)*cp*speed,vy:Math.sin(py)*speed,vz:Math.cos(yaw)*cp*speed,ttl:1.5,damage:w.damage*r.damage});
     }
     state.fireCooldown = w.cooldown / r.fireRate;
   }
@@ -224,7 +224,7 @@
       const f=getForward(), right=getRight();
       state.player.vx=((f.x*mz + right.x*mx)/m)*moveSpeed;
       state.player.vz=((f.z*mz + right.z*mx)/m)*moveSpeed;
-      state.player.yaw = Math.atan2(f.z,f.x);
+      state.player.yaw = Math.atan2(f.x,f.z);
 
       if(k.has(' ') && Math.abs(state.player.y)<0.001){ state.player.vy = 7.2*r.gravity; }
       state.player.vy -= 18*dt*r.gravity;
