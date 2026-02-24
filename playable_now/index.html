@@ -329,6 +329,11 @@
     ctx.strokeStyle=color; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
   }
 
+  function cameraDepth(x,y,z){
+    const p=toCamera(x,y,z);
+    return p ? p.z : -1;
+  }
+
   function drawBox(x,y,z,w,h,d,color){
     const p=[
       project(x-w/2,y,z-d/2), project(x+w/2,y,z-d/2), project(x+w/2,y,z+d/2), project(x-w/2,y,z+d/2),
@@ -451,19 +456,37 @@
 
     drawBox(0,-0.14,0,state.arena*2,0.12,state.arena*2,'#d9b578');
 
+    const renderables=[];
     for(const b of state.builds){
-      const hp=b.hp/b.maxHp;
-      const base=hp>0.66?'#6e7078':hp>0.33?'#7f838f':'#9fa6b6';
-      drawBox(b.x,0,b.z,b.w,b.h,b.d,base);
-      drawBox(b.x,1.88,b.z,b.w*0.96,0.15,b.d*0.96,'#b6bbc8');
-      drawBox(b.x-b.w*0.42,0,b.z,0.18,b.h,0.18,'#4a4f5c');
-      drawBox(b.x+b.w*0.42,0,b.z,0.18,b.h,0.18,'#4a4f5c');
+      renderables.push({z:cameraDepth(b.x,1.1,b.z), draw:()=>{
+        const hp=b.hp/b.maxHp;
+        const base=hp>0.66?'#6e7078':hp>0.33?'#7f838f':'#9fa6b6';
+        drawBox(b.x,0,b.z,b.w,b.h,b.d,base);
+        drawBox(b.x,1.88,b.z,b.w*0.96,0.15,b.d*0.96,'#b6bbc8');
+        drawBox(b.x-b.w*0.42,0,b.z,0.18,b.h,0.18,'#4a4f5c');
+        drawBox(b.x+b.w*0.42,0,b.z,0.18,b.h,0.18,'#4a4f5c');
+      }});
     }
-    for(const l of state.loot) drawBox(l.x,0,l.z,0.5,0.5,0.5,'#ffd66e');
-    for(const e of state.enemies) drawEnemyModel(e);
-    for(const b of state.bullets){ const p=project(b.x,b.y,b.z); if(!p) continue; ctx.fillStyle='#eff6ff'; circle(p.x,p.y,Math.max(1.2,3*p.s/120),true); }
+    for(const l of state.loot){
+      renderables.push({z:cameraDepth(l.x,0.3,l.z), draw:()=>drawBox(l.x,0,l.z,0.5,0.5,0.5,'#ffd66e')});
+    }
+    for(const e of state.enemies){
+      renderables.push({z:cameraDepth(e.x,1.1,e.z), draw:()=>drawEnemyModel(e)});
+    }
+    renderables.push({z:cameraDepth(state.player.x,1.0,state.player.z), draw:()=>drawPlayerModel()});
+    renderables.push({z:cameraDepth(state.player.x,1.0,state.player.z)-0.02, draw:()=>drawWeaponModel3D()});
 
-    drawPlayerModel();
+    renderables
+      .filter(item=>item.z>0)
+      .sort((a,b)=>b.z-a.z)
+      .forEach(item=>item.draw());
+
+    for(const b of state.bullets){
+      const p=project(b.x,b.y,b.z);
+      if(!p) continue;
+      ctx.fillStyle='#eff6ff';
+      circle(p.x,p.y,Math.max(1.2,3*p.s/120),true);
+    }
 
     // crosshair
     ctx.strokeStyle='#deebff';
@@ -471,13 +494,13 @@
     ctx.moveTo(canvas.width/2-8,canvas.height/2); ctx.lineTo(canvas.width/2+8,canvas.height/2);
     ctx.moveTo(canvas.width/2,canvas.height/2-8); ctx.lineTo(canvas.width/2,canvas.height/2+8);
     ctx.stroke();
-
-    drawWeaponModel3D();
   }
 
   canvas.addEventListener('mousemove', (e)=>{
     if(document.pointerLockElement!==canvas) return;
     state.cameraYaw += e.movementX*0.0028;
+    if(state.cameraYaw>Math.PI) state.cameraYaw-=Math.PI*2;
+    if(state.cameraYaw<-Math.PI) state.cameraYaw+=Math.PI*2;
     state.cameraPitch = Math.max(-0.55,Math.min(0.35,state.cameraPitch - e.movementY*0.0018));
     state.player.yaw = state.cameraYaw;
   });
