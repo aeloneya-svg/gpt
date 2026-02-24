@@ -308,12 +308,25 @@
 
   function drawPlayerModel(){
     const p=state.player;
-    drawBox(p.x,0,p.z,1.2,1.6,0.9,'#79d4ff'); // torso
-    drawBox(p.x,1.5,p.z,0.9,0.9,0.9,'#9ce5ff'); // head
-    drawBox(p.x-0.55,0.2,p.z,0.35,1.0,0.35,'#62b8e4');
-    drawBox(p.x+0.55,0.2,p.z,0.35,1.0,0.35,'#62b8e4');
-    drawBox(p.x-0.3,0,p.z,0.35,0.95,0.35,'#57a7d1');
-    drawBox(p.x+0.3,0,p.z,0.35,0.95,0.35,'#57a7d1');
+    const stride = Math.sin(performance.now()*0.01) * 0.18 * (Math.hypot(p.vx,p.vz)>1 ? 1 : 0.2);
+    // suit torso (blue)
+    drawBox(p.x,0.1,p.z,1.18,1.55,0.88,'#2f66d4');
+    // chest/neck highlight
+    drawBox(p.x,1.35,p.z,0.78,0.35,0.55,'#3f7af0');
+    // head (skin)
+    drawBox(p.x,1.62,p.z,0.65,0.72,0.62,'#f0c9a7');
+    // shoulders/gloves
+    drawBox(p.x-0.62,0.85,p.z,0.28,0.75,0.28,'#2f66d4');
+    drawBox(p.x+0.62,0.85,p.z,0.28,0.75,0.28,'#2f66d4');
+    drawBox(p.x-0.62,0.18+stride,p.z,0.28,0.7,0.28,'#f2c84b');
+    drawBox(p.x+0.62,0.18-stride,p.z,0.28,0.7,0.28,'#f2c84b');
+    // legs + boots
+    drawBox(p.x-0.24,0.0+stride,p.z,0.3,0.9,0.3,'#2a58b8');
+    drawBox(p.x+0.24,0.0-stride,p.z,0.3,0.9,0.3,'#2a58b8');
+    drawBox(p.x-0.24,-0.02+stride,p.z,0.34,0.24,0.4,'#f2c84b');
+    drawBox(p.x+0.24,-0.02-stride,p.z,0.34,0.24,0.4,'#f2c84b');
+    // belt accent
+    drawBox(p.x,0.78,p.z,0.84,0.16,0.58,'#f0d24f');
   }
 
   function drawEnemyModel(e){
@@ -421,7 +434,6 @@
       else { state.t0 += performance.now()-state.pausedAt; state.paused=false; }
     }
     if(e.key==='Enter' && state.ended) reset();
-    if(k===' ') tryShoot();
   }, {passive:false});
   window.addEventListener('keyup',(e)=> state.keys.delete(e.key.toLowerCase()));
 
