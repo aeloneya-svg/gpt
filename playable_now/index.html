@@ -79,6 +79,8 @@
     ended:false,
     fireCooldown:0,
     buildCooldown:0,
+    hitMarker:0,
+    damageFlash:0,
     weapon:'carbine',
     arena:52,
     grass:Array.from({length:320},()=>({x:(Math.random()*2-1)*48,z:(Math.random()*2-1)*48,h:0.25+Math.random()*0.5})),
@@ -99,6 +101,7 @@
     state.score=0; state.craft=0; state.built=0;
     state.t0=performance.now(); state.paused=false; state.ended=false;
     state.fireCooldown=0; state.buildCooldown=0;
+    state.hitMarker=0; state.damageFlash=0;
     state.cameraYaw=0; state.cameraPitch=-0.24;
     spawnEnemies(12);
   }
@@ -216,6 +219,8 @@
 
     state.fireCooldown=Math.max(0,state.fireCooldown-dt);
     state.buildCooldown=Math.max(0,state.buildCooldown-dt);
+    state.hitMarker=Math.max(0,state.hitMarker-dt*2.4);
+    state.damageFlash=Math.max(0,state.damageFlash-dt*3.2);
 
     if(!state.ended){
       const k=state.keys;
@@ -261,7 +266,7 @@
         if(hitBuild){ b.ttl=0; continue; }
         for(const e of state.enemies){
           if(Math.hypot(b.x-e.x,b.z-e.z)<1.1){
-            e.hp-=b.damage; e.hitFlash=1; b.ttl=0;
+            e.hp-=b.damage; e.hitFlash=1; b.ttl=0; state.hitMarker=1;
             if(e.hp<=0){ state.score+=40; state.loot.push({x:e.x,y:0.5,z:e.z,ttl:12}); }
             break;
           }
@@ -270,7 +275,7 @@
       state.enemies=state.enemies.filter(e=>e.hp>0);
 
       for(const e of state.enemies){
-        if(Math.hypot(e.x-state.player.x,e.z-state.player.z)<1.7){ state.player.hp-=24*dt; }
+        if(Math.hypot(e.x-state.player.x,e.z-state.player.z)<1.7){ state.player.hp-=24*dt; state.damageFlash=Math.min(1,state.damageFlash+dt*3); }
       }
 
       for(const l of state.loot){
@@ -282,10 +287,10 @@
       if(state.enemies.length<8) spawnEnemies(4);
     }
 
-    statusEl.textContent = state.ended ? `Match ended — ${state.player.hp>0?'Extracted':'Downed'} | Enter to restart` : `Time ${Math.ceil(left)}s | HP ${Math.max(0,Math.round(state.player.hp))}`;
+    statusEl.textContent = state.ended ? `Match ended — ${state.player.hp>0?'Extracted':'Downed'} | Enter to restart` : `Time ${Math.ceil(left)}s | HP ${Math.max(0,Math.round(state.player.hp))} | Rift Stage ${r.idx+1}/4`;
     riftEl.textContent = `Rift ${r.name} @ (${Math.round(r.anchor.x)}, ${Math.round(r.anchor.z)}) | Move x${r.move.toFixed(2)} Enemy x${r.enemy.toFixed(2)} Gravity x${r.gravity.toFixed(2)} Damage x${r.damage.toFixed(2)} Build x${r.buildArmor.toFixed(2)}`;
     scoreEl.textContent = `Score ${state.score} | Craft ${state.craft} | Built ${state.built} | Enemies ${state.enemies.length}`;
-    weaponEl.textContent = `Weapon ${weapons[state.weapon].name} | 1/2 to swap | Click to shoot`;
+    weaponEl.textContent = `Weapon ${weapons[state.weapon].name} | 1/2 swap | Click shoot | B build`;
   }
 
   function drawMountainsAndSky(){
@@ -350,6 +355,8 @@
 
   function drawPlayerModel(){
     const p=state.player;
+    const sh=project(p.x,0.02,p.z);
+    if(sh){ ctx.fillStyle='rgba(0,0,0,0.22)'; circle(sh.x,sh.y,Math.max(4,28/sh.s*110),true); }
     const stride = Math.sin(performance.now()*0.01) * 0.18 * (Math.hypot(p.vx,p.vz)>1 ? 1 : 0.2);
     // suit torso (blue)
     drawBox(p.x,0.1,p.z,1.18,1.55,0.88,'#2f66d4');
@@ -373,6 +380,8 @@
 
   function drawEnemyModel(e){
     const bob=Math.sin(performance.now()*0.004 + e.x*0.5 + e.z*0.5)*0.08;
+    const sh=project(e.x,0.02,e.z);
+    if(sh){ ctx.fillStyle='rgba(0,0,0,0.2)'; circle(sh.x,sh.y,Math.max(4,26/sh.s*110),true); }
     const hit=e.hitFlash>0;
     drawBox(e.x,0.15+bob,e.z,1.4,1.6,1.1, hit ? '#d6f58e' : '#9bb354');
     drawBox(e.x,1.65+bob,e.z,1.05,0.9,0.9, hit ? '#cfe878' : '#a8c25d');
@@ -448,6 +457,26 @@
     }
   }
 
+  function drawFeedbackOverlay(){
+    if(state.damageFlash>0.01){
+      ctx.fillStyle=`rgba(180,40,35,${Math.min(0.28,state.damageFlash*0.28)})`;
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+    if(state.hitMarker>0.01){
+      const a=Math.min(1,state.hitMarker);
+      const cx=canvas.width/2, cy=canvas.height/2;
+      ctx.strokeStyle=`rgba(255,245,220,${a})`;
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.moveTo(cx-14,cy-14); ctx.lineTo(cx-6,cy-6);
+      ctx.moveTo(cx+14,cy-14); ctx.lineTo(cx+6,cy-6);
+      ctx.moveTo(cx-14,cy+14); ctx.lineTo(cx-6,cy+6);
+      ctx.moveTo(cx+14,cy+14); ctx.lineTo(cx+6,cy+6);
+      ctx.stroke();
+      ctx.lineWidth=1;
+    }
+  }
+
   function draw(){
     drawMountainsAndSky();
     drawGridAndGrass();
@@ -494,6 +523,8 @@
     ctx.moveTo(canvas.width/2-8,canvas.height/2); ctx.lineTo(canvas.width/2+8,canvas.height/2);
     ctx.moveTo(canvas.width/2,canvas.height/2-8); ctx.lineTo(canvas.width/2,canvas.height/2+8);
     ctx.stroke();
+
+    drawFeedbackOverlay();
   }
 
   canvas.addEventListener('mousemove', (e)=>{
