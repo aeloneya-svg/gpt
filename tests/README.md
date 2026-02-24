@@ -4,4 +4,4 @@
 - `backend/tests/unit/matchmaker.test.ts`: unit checks for party-first matchmaking.
 - `backend/tests/integration/runIntegration.ts`: 30-player flow + settings/store + liveops + anti-cheat + moderation + analytics checks.
 - `backend/tests/stress/simulate100.ts`: 100 simulated queue joins.
-- Manual instant-play check: open `playable_now/index.html` and verify mountains + dense grass + detailed guns, weapon switching (1/2), pause/resume (P), 3D movement/look/shoot/build, Rift stat changes, walls blocking enemies, and match restart.
+- Manual instant-play check: open `playable_now/index.html` and verify third-person camera, visible 3D player model, monster enemy models, WASD movement, mouse aiming + click shooting, weapon switching (1/2), Rift effects, useful cover building, and match restart.

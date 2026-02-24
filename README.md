@@ -24,7 +24,7 @@ Then open:
 
 (Or pass a custom port: `./scripts/play_now.sh 7777`.)
 
-This instant demo runs as a polished 3D arena prototype: layered mountains, dense procedural grass, two detailed weapon models (carbine + shotgun) with recoil/muzzle flash, move/shoot/build defensive blocks, collect crafting drops, survive rotating Rift modifiers with gameplay-changing stats, and finish a timed match.
+This instant demo runs as a polished third-person 3D arena prototype: layered mountains, dense grass, a visible 3D player character, monster enemies inspired by your reference image, proper click-to-shoot gunplay, buildable cover, and Rift modifiers with clear gameplay impact.
 
 ## Preflight
 
